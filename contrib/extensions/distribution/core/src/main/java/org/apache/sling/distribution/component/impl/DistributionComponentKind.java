@@ -19,6 +19,11 @@
 package org.apache.sling.distribution.component.impl;
 
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.sling.distribution.agent.DistributionAgent;
 import org.apache.sling.distribution.agent.impl.DistributionRequestAuthorizationStrategy;
 import org.apache.sling.distribution.agent.impl.ForwardDistributionAgentFactory;
@@ -36,7 +41,7 @@ import org.apache.sling.distribution.packaging.impl.importer.LocalDistributionPa
 import org.apache.sling.distribution.packaging.impl.importer.RemoteDistributionPackageImporterFactory;
 import org.apache.sling.distribution.queue.DistributionQueueProvider;
 import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStrategy;
-import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
+import org.apache.sling.distribution.packaging.DistributionPackageBuilder;
 import org.apache.sling.distribution.serialization.impl.vlt.VaultDistributionPackageBuilderFactory;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.transport.impl.UserCredentialsDistributionTransportSecretProvider;
@@ -46,11 +51,6 @@ import org.apache.sling.distribution.trigger.impl.JcrEventDistributionTriggerFac
 import org.apache.sling.distribution.trigger.impl.PersistedJcrEventDistributionTriggerFactory;
 import org.apache.sling.distribution.trigger.impl.ResourceEventDistributionTriggerFactory;
 import org.apache.sling.distribution.trigger.impl.ScheduledDistributionTriggerFactory;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Enum that represents the main distribution component kinds that can be configured for distribution.
@@ -68,10 +68,8 @@ public enum DistributionComponentKind {
     TRIGGER("trigger");
 
 
-
-
-    private static Map<DistributionComponentKind, Class> classMap = new HashMap<DistributionComponentKind, Class>();
-    private static Map<DistributionComponentKind, Map<String, Class>> factoryMap = new HashMap<DistributionComponentKind, Map<String, Class>>();
+    private static final Map<DistributionComponentKind, Class> classMap = new HashMap<DistributionComponentKind, Class>();
+    private static final Map<DistributionComponentKind, Map<String, Class>> factoryMap = new HashMap<DistributionComponentKind, Map<String, Class>>();
 
     static {
         registerKind(AGENT, DistributionAgent.class);
@@ -152,7 +150,6 @@ public enum DistributionComponentKind {
         return name;
     }
 
-
     private static void registerKind(DistributionComponentKind kind, Class kindClass) {
         classMap.put(kind, kindClass);
     }
@@ -167,7 +164,6 @@ public enum DistributionComponentKind {
 
         kindMap.put(type, factoryClass);
     }
-
 
     public String getFactory(String type) {
         Class factory = factoryMap.get(this).get(type);

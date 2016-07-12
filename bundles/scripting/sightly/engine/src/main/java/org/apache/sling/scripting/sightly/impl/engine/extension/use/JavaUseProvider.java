@@ -31,13 +31,11 @@ import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.resource.Resource;
-import org.apache.sling.api.resource.ResourceResolver;
-import org.apache.sling.api.scripting.SlingBindings;
 import org.apache.sling.api.scripting.SlingScriptHelper;
-import org.apache.sling.commons.classloader.DynamicClassLoaderManager;
-import org.apache.sling.scripting.sightly.ResourceResolution;
-import org.apache.sling.scripting.sightly.impl.compiler.CompilerException;
-import org.apache.sling.scripting.sightly.impl.compiler.SightlyJavaCompilerService;
+import org.apache.sling.commons.classloader.ClassLoaderWriter;
+import org.apache.sling.scripting.sightly.impl.engine.SightlyJavaCompilerService;
+import org.apache.sling.scripting.sightly.impl.engine.UnitChangeMonitor;
+import org.apache.sling.scripting.sightly.impl.utils.BindingsUtils;
 import org.apache.sling.scripting.sightly.pojo.Use;
 import org.apache.sling.scripting.sightly.render.RenderContext;
 import org.apache.sling.scripting.sightly.use.ProviderOutcome;
@@ -71,7 +69,10 @@ public class JavaUseProvider implements UseProvider {
     private SightlyJavaCompilerService sightlyJavaCompilerService = null;
 
     @Reference
-    private DynamicClassLoaderManager dynamicClassLoaderManager = null;
+    private UnitChangeMonitor unitChangeMonitor = null;
+
+    @Reference
+    private ClassLoaderWriter classLoaderWriter = null;
 
     @Override
     public ProviderOutcome provide(String identifier, RenderContext renderContext, Bindings arguments) {
@@ -79,37 +80,57 @@ public class JavaUseProvider implements UseProvider {
             LOG.debug("Identifier {} does not match a Java class name pattern.", identifier);
             return ProviderOutcome.failure();
         }
-
         Bindings globalBindings = renderContext.getBindings();
-        Bindings bindings = UseProviderUtils.merge(globalBindings, arguments);
-        SlingScriptHelper sling = UseProviderUtils.getHelper(bindings);
-        Resource resource = (Resource) bindings.get(SlingBindings.RESOURCE);
-        final SlingHttpServletRequest request = (SlingHttpServletRequest) bindings.get(SlingBindings.REQUEST);
+        SlingScriptHelper sling = BindingsUtils.getHelper(globalBindings);
+        SlingHttpServletRequest request = BindingsUtils.getRequest(globalBindings);
         Map<String, Object> overrides = setRequestAttributes(request, arguments);
 
         Object result;
         try {
-            Class<?> cls = dynamicClassLoaderManager.getDynamicClassLoader().loadClass(identifier);
-            result = resource.adaptTo(cls);
+            LOG.debug("Attempting to load class {} from the classloader cache.", identifier);
+            Class<?> cls = classLoaderWriter.getClassLoader().loadClass(identifier);
+            if (unitChangeMonitor.getLastModifiedDateForJavaUseObject(identifier) > 0) {
+                // the object is a POJO that was changed in the repository but not recompiled;
+                LOG.debug("Class {} was available in the classloader cache but it needs to be recompiled.");
+                result = sightlyJavaCompilerService.getInstance(renderContext, identifier);
+                if (result instanceof Use) {
+                    ((Use) result).init(BindingsUtils.merge(globalBindings, arguments));
+                }
+                return ProviderOutcome.success(result);
+            }
+            // attempt OSGi service load
+            result = sling.getService(cls);
+            if (result != null) {
+                return ProviderOutcome.success(result);
+            }
+            result = request.adaptTo(cls);
             if (result == null) {
-                result = request.adaptTo(cls);
+                Resource resource = BindingsUtils.getResource(globalBindings);
+                result = resource.adaptTo(cls);
             }
             if (result != null) {
                 return ProviderOutcome.success(result);
             } else {
                 /**
-                 * the object was cached by the classloader but it's not adaptable from {@link Resource} or {@link
+                 * the object was cached by the class loader but it's not adaptable from {@link Resource} or {@link
                  * SlingHttpServletRequest}; attempt to load it like a regular POJO that optionally could implement {@link Use}
                  */
                 result = cls.newInstance();
                 if (result instanceof Use) {
-                    ((Use) result).init(bindings);
+                    ((Use) result).init(BindingsUtils.merge(globalBindings, arguments));
                 }
                 return ProviderOutcome.notNullOrFailure(result);
             }
         } catch (ClassNotFoundException e) {
-            // this object might not be exported from a bundle; let's try to load it from the repository
-            return getPOJOFromRepository(renderContext, sling, identifier, bindings);
+            /**
+             * this object is either not exported from a bundle, or it's a POJO from the repository that wasn't loaded before
+             */
+            LOG.debug("Class {} was not found in the classloader cache.", identifier);
+            result = sightlyJavaCompilerService.getInstance(renderContext, identifier);
+            if (result instanceof Use) {
+                ((Use) result).init(BindingsUtils.merge(globalBindings, arguments));
+            }
+            return ProviderOutcome.success(result);
         } catch (Exception e) {
             // any other exception is an error
             return ProviderOutcome.failure(e);
@@ -118,22 +139,8 @@ public class JavaUseProvider implements UseProvider {
         }
     }
 
-    private ProviderOutcome getPOJOFromRepository(RenderContext renderContext, SlingScriptHelper sling, String identifier, Bindings bindings) {
-        try {
-            ResourceResolver adminResolver = renderContext.getScriptResourceResolver();
-            Resource resource = ResourceResolution.getResourceForRequest(adminResolver, sling.getRequest());
-            Object result = sightlyJavaCompilerService.getInstance(adminResolver, resource, identifier);
-            if (result instanceof Use) {
-                ((Use) result).init(bindings);
-            }
-            return ProviderOutcome.success(result);
-        } catch (Exception e) {
-            return ProviderOutcome.failure(e);
-        }
-    }
-
     private Map<String, Object> setRequestAttributes(ServletRequest request, Bindings arguments) {
-        Map<String, Object> overrides = new HashMap<String, Object>();
+        Map<String, Object> overrides = new HashMap<>();
         for (Map.Entry<String, Object> entry : arguments.entrySet()) {
             String key = entry.getKey();
             Object value = entry.getValue();

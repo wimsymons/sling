@@ -24,7 +24,7 @@
   <parent>
     <groupId>org.apache.sling</groupId>
     <artifactId>sling</artifactId>
-    <version>24</version>
+    <version>26</version>
     <relativePath/>
   </parent>
 
@@ -34,6 +34,12 @@
 
   <name>Apache Sling Launchpad Karaf - Integration Tests</name>
   <description>Integration Tests for Apache Sling Launchpad Karaf</description>
+
+  <properties>
+    <org.apache.jackrabbit.version>2.12.2</org.apache.jackrabbit.version>
+    <org.apache.karaf.version>4.0.5</org.apache.karaf.version>
+    <org.ops4j.pax.exam.version>4.9.1</org.ops4j.pax.exam.version>
+  </properties>
 
   <dependencies>
     <!-- javax -->
@@ -59,30 +65,36 @@
       <artifactId>org.osgi.compendium</artifactId>
       <scope>provided</scope>
     </dependency>
-    <!-- Apache Derby -->
-    <dependency>
-      <groupId>org.apache.derby</groupId>
-      <artifactId>derby</artifactId>
-      <version>10.11.1.1</version>
-    </dependency>
     <!-- Apache Karaf -->
     <dependency>
       <groupId>org.apache.karaf.features</groupId>
       <artifactId>org.apache.karaf.features.core</artifactId>
-      <version>4.0.0</version>
+      <version>${org.apache.karaf.version}</version>
       <scope>provided</scope>
     </dependency>
     <!-- Apache Sling -->
     <dependency>
       <groupId>org.apache.sling</groupId>
+      <artifactId>org.apache.sling.api</artifactId>
+      <version>2.11.0</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.sling</groupId>
       <artifactId>org.apache.sling.jcr.api</artifactId>
-      <version>2.2.0</version>
+      <version>2.3.0</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.sling</groupId>
       <artifactId>org.apache.sling.engine</artifactId>
-      <version>2.4.2</version>
+      <version>2.4.6</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.sling</groupId>
+      <artifactId>org.apache.sling.commons.messaging</artifactId>
+      <version>0.0.1-SNAPSHOT</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -91,6 +103,13 @@
       <version>${project.version}</version>
       <type>xml</type>
       <classifier>features</classifier>
+      <scope>test</scope>
+    </dependency>
+    <!-- Apache Jackrabbit -->
+    <dependency>
+      <groupId>org.apache.jackrabbit</groupId>
+      <artifactId>jackrabbit-jcr-commons</artifactId>
+      <version>${org.apache.jackrabbit.version}</version>
       <scope>test</scope>
     </dependency>
     <!-- bnd -->
@@ -104,24 +123,24 @@
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
-      <version>1.6.6</version>
+      <version>1.7.13</version>
       <scope>test</scope>
     </dependency>
     <!-- testing -->
     <dependency>
       <groupId>org.ops4j.pax.exam</groupId>
       <artifactId>pax-exam</artifactId>
-      <version>4.5.0</version>
+      <version>${org.ops4j.pax.exam.version}</version>
     </dependency>
     <dependency>
       <groupId>org.ops4j.pax.exam</groupId>
       <artifactId>pax-exam-container-karaf</artifactId>
-      <version>4.5.0</version>
+      <version>${org.ops4j.pax.exam.version}</version>
     </dependency>
     <dependency>
       <groupId>org.ops4j.pax.exam</groupId>
       <artifactId>pax-exam-junit4</artifactId>
-      <version>4.5.0</version>
+      <version>${org.ops4j.pax.exam.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -133,7 +152,7 @@
       <groupId>org.apache.karaf</groupId>
       <artifactId>apache-karaf</artifactId>
       <type>tar.gz</type>
-      <version>4.0.0</version>
+      <version>${org.apache.karaf.version}</version>
       <scope>test</scope>
       <exclusions>
         <exclusion>
@@ -142,16 +161,80 @@
         </exclusion>
       </exclusions>
     </dependency>
+    <!-- MongoDB -->
     <dependency>
       <groupId>de.flapdoodle.embed</groupId>
       <artifactId>de.flapdoodle.embed.mongo</artifactId>
-      <version>1.47.2</version>
+      <version>1.50.1</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>de.flapdoodle.embed</groupId>
       <artifactId>de.flapdoodle.embed.process</artifactId>
-      <version>1.41.1</version>
+      <version>1.50.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.java.dev.jna</groupId>
+      <artifactId>jna</artifactId>
+      <version>4.2.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.java.dev.jna</groupId>
+      <artifactId>jna-platform</artifactId>
+      <version>4.2.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
+      <version>1.9</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Couchbase -->
+    <!--
+    <dependency>
+      <groupId>org.couchbase.mock</groupId>
+      <artifactId>CouchbaseMock</artifactId>
+      <version>1.4.1</version>
+      <scope>test</scope>
+    </dependency>
+    -->
+    <dependency>
+      <groupId>com.couchbase.client</groupId>
+      <artifactId>couchbase-client</artifactId>
+      <version>1.4.6</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.intellij</groupId>
+      <artifactId>annotations</artifactId>
+      <version>12.0</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.3.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.googlecode.json-simple</groupId>
+      <artifactId>json-simple</artifactId>
+      <version>1.1.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.servicemix.bundles</groupId>
+      <artifactId>org.apache.servicemix.bundles.rhino</artifactId>
+      <version>1.7.7.1_1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.tukaani</groupId>
+      <artifactId>xz</artifactId>
+      <version>1.5</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -191,7 +274,7 @@
     <profile>
       <id>it</id>
       <activation>
-        <jdk>[1.7,)</jdk>
+        <jdk>[1.8,)</jdk>
       </activation>
       <build>
         <plugins>
@@ -207,6 +290,12 @@
                 </goals>
               </execution>
             </executions>
+            <configuration>
+              <excludes>
+                <!-- SLING-5122, SLING-5123 -->
+                <exclude>**/SlingAuthXing*.*</exclude>
+              </excludes>
+            </configuration>
           </plugin>
         </plugins>
       </build>

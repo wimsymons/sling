@@ -216,11 +216,17 @@ public class RequestData {
         this.slingResponse = new SlingHttpServletResponseImpl(this,
             servletResponse);
 
-        this.requestProgressTracker = new SlingRequestProgressTracker();
-        this.requestProgressTracker.log(
-        		"Method={0}, PathInfo={1}",
-        		this.slingRequest.getMethod(), this.slingRequest.getPathInfo()
-        );
+        // Getting the RequestProgressTracker from the request attributes like
+        // this should not be generally used, it's just a way to pass it from
+        // its creation point to here, so it's made available via 
+        // the Sling request's getRequestProgressTracker method.
+        final Object o = request.getAttribute(RequestProgressTracker.class.getName());
+        if(o instanceof SlingRequestProgressTracker) {
+            this.requestProgressTracker = (SlingRequestProgressTracker)o;
+        } else {
+            log.warn("SlingRequestProgressTracker not found in request attributes");
+            this.requestProgressTracker = new SlingRequestProgressTracker(request);
+        }
     }
 
     public Resource initResource(ResourceResolver resourceResolver) {
@@ -231,16 +237,16 @@ public class RequestData {
         requestProgressTracker.startTimer("ResourceResolution");
         final SlingHttpServletRequest request = getSlingRequest();
 
-        final String requestURI = servletRequest.getRequestURI();
+        StringBuffer requestURL = servletRequest.getRequestURL();
         String path = request.getPathInfo();
-        if (requestURI.contains(";") && !path.contains(";")) {
-            final String decodedURI;
+        if (requestURL.indexOf(";") > -1 && !path.contains(";")) {
+            final String decodedURL;
             try {
-                decodedURI = URLDecoder.decode(requestURI, "UTF-8");
+                decodedURL = URLDecoder.decode(requestURL.toString(), "UTF-8");
             } catch (UnsupportedEncodingException e) {
                 throw new AssertionError("UTF-8 encoding is not supported");
             }
-            path = path.concat(decodedURI.substring(decodedURI.indexOf(';')));
+            path = path.concat(decodedURL.substring(decodedURL.indexOf(';')));
         }
 
         Resource resource = resourceResolver.resolve(request, path);

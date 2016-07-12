@@ -104,11 +104,23 @@ public interface Scheduler {
     /**
      * Schedule a job based on the options.
      *
-     * Note that if a job with the same name has already been added, the old job is cancelled and this new job replaces
+     * Note that if a job with the same name has already been added, the old job is
+     * cancelled and this new job replaces
      * the old job.
      *
-     * The job object needs either to be a {@link Job} or a {@link Runnable}. The options have to be created
+     * The job object needs either to be a {@link Job} or a {@link Runnable}. The
+     * options have to be created
      * by one of the provided methods from this scheduler.
+     *
+     * The job is only started on this instance - if it is started at all. The
+     * options for running on a single instance, on the leader etc. (see
+     * {@link ScheduleOptions#onInstancesOnly(String[])},
+     * {@link ScheduleOptions#onLeaderOnly(boolean)},
+     * and {@link ScheduleOptions#onSingleInstanceOnly(boolean)}) are only useful,
+     * if the same job is scheduled on all instances in a cluster. In this case this
+     * extra configuration controls on which instances the job is really started.
+     * Using the above options might not start the job on the current instance, for
+     * example if the current instance is not the leader.
      *
      * @param job The job to execute (either {@link Job} or {@link Runnable}).
      * @param options Required options defining how to schedule the job
@@ -125,7 +137,7 @@ public interface Scheduler {
     /**
      * Remove a scheduled job by name.
      *
-     * @param name The name of the job.
+     * @param jobName The name of the job.
      * @return <code>true</code> if the job existed and could be stopped, <code>false</code> otherwise.
      * @since 2.3
      */
@@ -133,6 +145,7 @@ public interface Scheduler {
 
     /**
      * Create a schedule options to fire a job immediately and only once.
+     * @return The schedule options.     
      * @since 2.3
      */
     ScheduleOptions NOW();
@@ -142,6 +155,7 @@ public interface Scheduler {
      * @param times The number of times this job should be started (must be higher than 1 or
      *              -1 for endless)
      * @param period Every period seconds this job is started (must be at higher than 0).
+     * @return The schedule options.     
      * @since 2.3
      */
     ScheduleOptions NOW(int times, long period);
@@ -149,9 +163,10 @@ public interface Scheduler {
     /**
      * Create a schedule options to fire a job once at a specific date
      * @param date The date this job should be run.
+     * @return The schedule options.     
      * @since 2.3
      */
-    ScheduleOptions AT(final Date date);
+    ScheduleOptions AT(Date date);
 
     /**
      * Create a schedule options to fire a job period starting at a specific date
@@ -159,16 +174,18 @@ public interface Scheduler {
      * @param times The number of times this job should be started (must be higher than 1 or
      *              -1 for endless)
      * @param period Every period seconds this job is started (must be at higher than 0).
+     * @return The schedule options.     
      * @since 2.3
      */
-    ScheduleOptions AT(final Date date, int times, long period);
+    ScheduleOptions AT(Date date, int times, long period);
 
     /**
      * Create a schedule options to schedule the job based on the expression
      * @param expression The cron exception
+     * @return The schedule options.     
      * @since 2.3
      */
-    ScheduleOptions EXPR(final String expression);
+    ScheduleOptions EXPR(String expression);
 
     /**
     /**

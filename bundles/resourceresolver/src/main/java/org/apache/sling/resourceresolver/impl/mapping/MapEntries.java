@@ -35,25 +35,26 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.SortedMap;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+
 import javax.servlet.http.HttpServletResponse;
+
 import org.apache.sling.api.SlingConstants;
 import org.apache.sling.api.resource.LoginException;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceUtil;
 import org.apache.sling.api.resource.ValueMap;
-import org.apache.sling.resourceresolver.impl.ResourceResolverFactoryImpl;
 import org.apache.sling.resourceresolver.impl.ResourceResolverImpl;
 import org.apache.sling.resourceresolver.impl.mapping.MapConfigurationProvider.VanityPathConfig;
 import org.osgi.framework.BundleContext;
@@ -167,7 +168,7 @@ public class MapEntries implements EventHandler {
         this.vanityBloomFilterFile = null;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({ "unchecked", "deprecation" })
     public MapEntries(final MapConfigurationProvider factory, final BundleContext bundleContext, final EventAdmin eventAdmin)
                     throws LoginException, IOException {
         this.resolver = factory.getAdministrativeResourceResolver(null);
@@ -853,6 +854,7 @@ public class MapEntries implements EventHandler {
     /**
      * get the vanity paths  Search for all nodes having a specific vanityPath
      */
+    @SuppressWarnings("deprecation")
     private Map<String, List<MapEntry>> getVanityPaths(String vanityPath) {
 
         Map<String, List<MapEntry>> entryMap = new HashMap<String, List<MapEntry>>();    
@@ -1020,17 +1022,25 @@ public class MapEntries implements EventHandler {
      * Add an entry to the resolve map.
      */
     private boolean addEntry(final Map<String, List<MapEntry>> entryMap, final String key, final MapEntry entry) {
+        
         if (entry==null){
             return false;
         }
+        
         List<MapEntry> entries = entryMap.get(key);
         if (entries == null) {
             entries = new ArrayList<MapEntry>();
+            entries.add(entry);
+            // and finally sort list
+            Collections.sort(entries);
             entryMap.put(key, entries);
+        } else {
+            List<MapEntry> entriesCopy =new ArrayList<MapEntry>(entries);
+            entriesCopy.add(entry);
+            // and finally sort list
+            Collections.sort( entriesCopy);
+            entryMap.put(key, entriesCopy);
         }
-        entries.add(entry);
-        // and finally sort list
-        Collections.sort(entries);
         return true;
     }
 

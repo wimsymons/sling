@@ -18,7 +18,6 @@
  */
 package org.apache.sling.engine.impl;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Dictionary;
 import java.util.Enumeration;
@@ -53,6 +52,7 @@ import org.apache.sling.commons.mime.MimeTypeService;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.engine.SlingRequestProcessor;
 import org.apache.sling.engine.impl.filter.ServletFilterManager;
+import org.apache.sling.engine.impl.helper.ClientAbortException;
 import org.apache.sling.engine.impl.helper.RequestListenerManager;
 import org.apache.sling.engine.impl.helper.SlingServletContext;
 import org.apache.sling.engine.impl.request.RequestData;
@@ -111,7 +111,7 @@ public class SlingMainServlet extends GenericServlet {
     private static final String PROP_SERVER_INFO = "sling.serverinfo";
 
 
-    @Property(value = {"X-Content-Type-Options=nosniff"},
+    @Property(value = {"X-Content-Type-Options=nosniff", "X-Frame-Options=SAMEORIGIN"},
             label = "Additional response headers",
             description = "Provides mappings for additional response headers "
                 + "Each entry is of the form 'bundleId [ \":\" responseHeaderName ] \"=\" responseHeaderValue' ",
@@ -216,13 +216,8 @@ public class SlingMainServlet extends GenericServlet {
                 requestProcessor.doProcessRequest(request, (HttpServletResponse) res,
                     resolver);
 
-            } catch (IOException ioe) {
-
-                // SLING-3498: Jetty with NIO does not have a wrapped
-                // SocketException any longer but a plain IOException
-                // from the NIO Socket channel. Hence we don't care for
-                // unwrapping and just log at DEBUG level
-                log.debug("service: Probably client aborted request or any other network problem", ioe);
+            } catch (ClientAbortException cae) {
+                log.debug("service: ClientAbortException, probable cause is client aborted request or network problem", cae);
 
             } catch (Throwable t) {
 
@@ -384,14 +379,14 @@ public class SlingMainServlet extends GenericServlet {
             RequestData.DEFAULT_MAX_CALL_COUNTER));
         RequestData.setSlingMainServlet(this);
 
-        // configure default request parameter encoding
-        // log a message if such configuration exists ....
+        // Warn about the obsolete parameter encoding configuration
         if (componentConfig.get(PROP_DEFAULT_PARAMETER_ENCODING) != null) {
-            log.warn("Configure default request parameter encoding with 'org.apache.sling.parameters.config' configuration; the property "
+            log.warn("Please configure the default request parameter encoding using "
+                + "the 'org.apache.sling.engine.parameters' configuration PID; the property "
                 + PROP_DEFAULT_PARAMETER_ENCODING
                 + "="
                 + componentConfig.get(PROP_DEFAULT_PARAMETER_ENCODING)
-                + " is ignored");
+                + " is obsolete and ignored");
         }
 
         // register the servlet and resources

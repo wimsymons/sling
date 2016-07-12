@@ -29,7 +29,6 @@ import static org.mockito.Mockito.when;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,7 +39,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceUtil;
@@ -75,6 +79,7 @@ public class MapEntriesTest {
     @Mock
     private EventAdmin eventAdmin;
 
+    @SuppressWarnings("deprecation")
     @Before
     public void setup() throws Exception {
         MockitoAnnotations.initMocks(this);
@@ -267,8 +272,9 @@ public class MapEntriesTest {
         
         Field field = MapEntries.class.getDeclaredField("vanityTargets");
         field.setAccessible(true);
+        @SuppressWarnings("unchecked")
         Map<String, List<String>> vanityTargets = (Map<String, List<String>>) field.get(mapEntries);
-        assertEquals(4, vanityTargets.size());        
+        assertEquals(4, vanityTargets.size());
         
     }
 
@@ -362,6 +368,7 @@ public class MapEntriesTest {
         assertEquals("/content", actualContent);
     }
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doAddVanity() throws Exception {
         List<MapEntry> entries = mapEntries.getResolveMaps();
@@ -432,6 +439,7 @@ public class MapEntriesTest {
         assertNotNull(vanityTargets.get("/vanityPathOnJcrContent"));
     }
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doAddVanity_1() throws Exception {
         Field field1 = MapEntries.class.getDeclaredField("maxCachedVanityPathEntries");
@@ -507,6 +515,7 @@ public class MapEntriesTest {
     }
     
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doUpdateVanity() throws Exception {
         Field field0 = MapEntries.class.getDeclaredField("resolveMapsMap");
@@ -584,6 +593,7 @@ public class MapEntriesTest {
         assertEquals("/target/vanityPathOnJcrContentUpdated", vanityTargets.get("/vanityPathOnJcrContent").get(0));
     }
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doRemoveVanity() throws Exception {
         Field field0 = MapEntries.class.getDeclaredField("resolveMapsMap");
@@ -659,6 +669,7 @@ public class MapEntriesTest {
         
     }
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doUpdateVanityOrder() throws Exception {
         Field field0 = MapEntries.class.getDeclaredField("resolveMapsMap");
@@ -812,6 +823,7 @@ public class MapEntriesTest {
         assertNull(aliasMap);
     }    
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doAddAlias() throws Exception {
         Method method = MapEntries.class.getDeclaredMethod("doAddAlias", String.class);
@@ -878,6 +890,7 @@ public class MapEntriesTest {
         assertEquals(1, aliasMap.size()); 
     }
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doAddAlias2() throws Exception {
         Method method = MapEntries.class.getDeclaredMethod("doAddAlias", String.class);
@@ -945,6 +958,7 @@ public class MapEntriesTest {
     }
     
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doUpdateAlias() throws Exception {
         Method method = MapEntries.class.getDeclaredMethod("doAddAlias", String.class);
@@ -1076,6 +1090,7 @@ public class MapEntriesTest {
  
     }
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doRemoveAlias() throws Exception {       
         Method method = MapEntries.class.getDeclaredMethod("doAddAlias", String.class);
@@ -1135,6 +1150,7 @@ public class MapEntriesTest {
         assertEquals(0, aliasMap.size()); 
     } 
 
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doRemoveAlias2() throws Exception { 
         Method method = MapEntries.class.getDeclaredMethod("doAddAlias", String.class);
@@ -1203,6 +1219,7 @@ public class MapEntriesTest {
         assertEquals(0, aliasMap.size());
     }
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doRemoveAlias3() throws Exception { 
         Method method = MapEntries.class.getDeclaredMethod("doAddAlias", String.class);
@@ -1310,6 +1327,7 @@ public class MapEntriesTest {
         assertNull(aliasMapEntry);
     }
     
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doRemoveAlias4() throws Exception {       
         Method method = MapEntries.class.getDeclaredMethod("doAddAlias", String.class);
@@ -1369,6 +1387,7 @@ public class MapEntriesTest {
         assertEquals(0, aliasMap.size()); 
     } 
        
+    @SuppressWarnings("unchecked")
     @Test
     public void test_doRemoveAlias5() throws Exception { 
         Method method = MapEntries.class.getDeclaredMethod("doAddAlias", String.class);
@@ -1801,4 +1820,66 @@ public class MapEntriesTest {
         assertEquals(2, counter.longValue());
     }
     
+    @Test
+    //SLING-4883
+    public void test_concutrrent_getResolveMapsIterator() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(10);
+        
+        final Resource justVanityPath = mock(Resource.class, "justVanityPath");
+        when(resourceResolver.getResource("/justVanityPath")).thenReturn(justVanityPath);
+        when(justVanityPath.getPath()).thenReturn("/justVanityPath");                 
+        when(justVanityPath.getName()).thenReturn("justVanityPath");
+        when(justVanityPath.adaptTo(ValueMap.class)).thenReturn(buildValueMap("sling:vanityPath", "/target/justVanityPath"));
+        
+        
+        when(resourceResolver.findResources(anyString(), eq("sql"))).thenAnswer(new Answer<Iterator<Resource>>() {
+
+            public Iterator<Resource> answer(InvocationOnMock invocation) throws Throwable {
+                if (invocation.getArguments()[0].toString().contains("sling:vanityPath")) {
+                    return Collections.singleton(justVanityPath).iterator();
+                } else {
+                    return Collections.<Resource> emptySet().iterator();
+                }
+            }
+        });
+        
+        
+        Field field1 = MapEntries.class.getDeclaredField("maxCachedVanityPathEntries");
+        field1.setAccessible(true);  
+        field1.set(mapEntries, 2);
+        
+        ArrayList<DataFuture> list = new ArrayList<DataFuture>();
+        for (int i =0;i<10;i++) {
+            list.add(createDataFuture(pool, mapEntries));
+ 
+        }
+ 
+       for (DataFuture df : list) {
+           df.future.get();           
+        }
+  
+    }
+    
+    // -------------------------- private methods ----------
+    private DataFuture createDataFuture(ExecutorService pool, final MapEntries mapEntries) {
+
+        Future<Iterator<?>> future = pool.submit(new Callable<Iterator<?>>() {
+            @Override
+            public Iterator<MapEntry> call() throws Exception {
+                return mapEntries.getResolveMapsIterator("http/localhost.8080/target/justVanityPath");                     
+            }
+        });
+        return new DataFuture(future);
+    }    
+    
+    // -------------------------- inner classes ------------
+
+    private static class DataFuture {
+        public Future<Iterator<?>> future;
+
+        public DataFuture(Future<Iterator<?>> future) {
+            super();
+            this.future = future;
+        }
+    }    
 }

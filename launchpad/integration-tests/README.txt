@@ -23,16 +23,13 @@ on host xyzzy, port 1234, with the Sling main servlet mounted under /foo:
     -Dtest.host=xyzzy \
     -Dhttp.base.path=foo \
     -Dwebdav.workspace.path=foo \
+    -Dlaunchpad.readiness.mediatype=.json:application/json \ 
     -Dtest=**/integrationtest/**/*Test.java
-
-JUnit OakOnly and JackrabbitOnly categories are used to select some tests
-which are specific to one of these implementations. By default, OakOnly tests
-are excluded, to switch to them use -Dsling.run.modes=oak
 
 To run the tests against the same instance that is used in the full build,
 start an instance by running
 
-   mvn slingstart:start -Dlaunchpad.keep.running=true
+   mvn slingstart:start -Dlaunchpad.keep.running=true -Dhttp.port=8080
 
 in the launchpad/testing folder, optionally using -Dsling.run.modes=oak to
 use Oak instead of Jackrabbit. Since that instance is using an arbitrary

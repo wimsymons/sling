@@ -101,8 +101,8 @@ public class JcrResourceBundleProvider implements ResourceBundleProvider, EventH
     /** default log */
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    @Reference(cardinality = ReferenceCardinality.OPTIONAL_UNARY, policy = ReferencePolicy.DYNAMIC)
-    private volatile ResourceResolverFactory resourceResolverFactory;
+    @Reference
+    private ResourceResolverFactory resourceResolverFactory;
 
     /**
      * The default Locale as configured with the <i>locale.default</i>
@@ -112,15 +112,8 @@ public class JcrResourceBundleProvider implements ResourceBundleProvider, EventH
     private Locale defaultLocale = Locale.ENGLISH;
 
     /**
-     * The credentials to access the repository or <code>null</code> to use
-     * access the repository as the anonymous user, which is the case if the
-     * <i>user</i> property is not set in the configuration.
-     */
-    private Map<String, Object> repoCredentials;
-
-    /**
      * The resource resolver used to access the resource bundles. This object is
-     * retrieved from the {@link #resourceResolverFactory} using the anonymous
+     * retrieved from the {@link #resourceResolverFactory} using the administrative
      * session or the session acquired using the {@link #repoCredentials}.
      */
     private ResourceResolver resourceResolver;
@@ -246,9 +239,8 @@ public class JcrResourceBundleProvider implements ResourceBundleProvider, EventH
             return true;
         }
         // get valuemap
-        ResourceResolver resolver = getResourceResolver();
-        JcrResourceBundle.refreshSession(resolver);
-        Resource resource = resolver.getResource(path);
+        resourceResolver.refresh();
+        Resource resource = resourceResolver.getResource(path);
         if (resource == null) {
             log.trace("Could not resource for '{}' for event {}", path, event);
             return false;
@@ -371,10 +363,12 @@ public class JcrResourceBundleProvider implements ResourceBundleProvider, EventH
     /**
      * Activates and configures this component with the repository access
      * details and the default locale to use
+     * @throws LoginException 
      */
-    protected void activate(ComponentContext context) {
+    protected void activate(ComponentContext context) throws LoginException {
         Dictionary<?, ?> props = context.getProperties();
 
+        Map<String, Object> repoCredentials;
         String user = PropertiesUtil.toString(props.get(PROP_USER), null);
         if (user == null || user.length() == 0) {
             repoCredentials = null;
@@ -393,42 +387,21 @@ public class JcrResourceBundleProvider implements ResourceBundleProvider, EventH
 
         this.bundleContext = context.getBundleContext();
         this.bundleServiceRegistrations = new HashMap<Key, ServiceRegistration>();
-        if (this.resourceResolverFactory != null) {
+        invalidationDelay = PropertiesUtil.toLong(props.get(PROP_INVALIDATION_DELAY), DEFAULT_INVALIDATION_DELAY);
+        if (this.resourceResolverFactory != null) { // this is only null during test execution!
+            if (repoCredentials == null) {
+                resourceResolver = resourceResolverFactory.getAdministrativeResourceResolver(null);
+            } else {
+                resourceResolver = resourceResolverFactory.getResourceResolver(repoCredentials);
+            }
             scheduleReloadBundles(false);
         }
 
-        invalidationDelay = PropertiesUtil.toLong(props.get(PROP_INVALIDATION_DELAY), DEFAULT_INVALIDATION_DELAY);
     }
 
     protected void deactivate() {
         clearCache();
-    }
-
-    /**
-     * Binds a new <code>ResourceResolverFactory</code>. If we are already
-     * bound to another factory, we release that latter one first.
-     */
-    protected void bindResourceResolverFactory(
-            ResourceResolverFactory resourceResolverFactory) {
-        if (this.resourceResolverFactory != null) {
-            releaseRepository();
-        }
-        this.resourceResolverFactory = resourceResolverFactory;
-        if (this.bundleContext != null) {
-            preloadBundles();
-        }
-    }
-
-    /**
-     * Unbinds the <code>ResourceResolverFactory</code>. If we are bound to
-     * this factory, we release it.
-     */
-    protected void unbindResourceResolverFactory(
-            ResourceResolverFactory resourceResolverFactory) {
-        if (this.resourceResolverFactory == resourceResolverFactory) {
-            releaseRepository();
-            this.resourceResolverFactory = null;
-        }
+        resourceResolver.close();
     }
 
     // ---------- internal -----------------------------------------------------
@@ -499,15 +472,7 @@ public class JcrResourceBundleProvider implements ResourceBundleProvider, EventH
      *             is not available to access the resources.
      */
     private JcrResourceBundle createResourceBundle(String baseName, Locale locale) {
-
-        ResourceResolver resolver = getResourceResolver();
-        if (resolver == null) {
-            log.info("createResourceBundle: Missing Resource Resolver, cannot create Resource Bundle");
-            throw new MissingResourceException(
-                "ResourceResolver not available", getClass().getName(), "");
-        }
-
-        final JcrResourceBundle bundle = new JcrResourceBundle(locale, baseName, resolver);
+        final JcrResourceBundle bundle = new JcrResourceBundle(locale, baseName, resourceResolver);
 
         // set parent resource bundle
         Locale parentLocale = getParentLocale(locale);
@@ -566,50 +531,6 @@ public class JcrResourceBundleProvider implements ResourceBundleProvider, EventH
         return rootResourceBundle;
     }
 
-    /**
-     * Returns the resource resolver to access messages. This method logs into
-     * the repository and registers with the observation manager if not already
-     * done so. If unable to connect to the repository, <code>null</code> is
-     * returned.
-     *
-     * @return The <code>ResourceResolver</code> or <code>null</code> if
-     *         unable to login to the repository. <code>null</code> is also
-     *         returned if no <code>ResourceResolverFactory</code> or no
-     *         <code>Repository</code> is available.
-     */
-    private ResourceResolver getResourceResolver() {
-        if (resourceResolver == null) {
-            ResourceResolverFactory fac = this.resourceResolverFactory;
-            if (fac == null) {
-
-                log.error("getResourceResolver: ResourceResolverFactory is missing. Cannot create ResourceResolver");
-
-            } else {
-                ResourceResolver resolver = null;
-                try {
-                    if (repoCredentials == null) {
-                    	// TODO: use ServiceResourceResolver if available
-                        resolver = fac.getAdministrativeResourceResolver(null);
-                    } else {
-                        resolver = fac.getResourceResolver(repoCredentials);
-                    }
-
-                    resourceResolver = resolver;
-
-                } catch (LoginException le) {
-
-                    log.error(
-                        "getResourceResolver: Problem setting up ResourceResolver with Session",
-                        le);
-
-                }
-
-            }
-        }
-
-        return resourceResolver;
-    }
-
     private void clearCache() {
         resourceBundleCache.clear();
         languageRootPaths.clear();
@@ -624,7 +545,8 @@ public class JcrResourceBundleProvider implements ResourceBundleProvider, EventH
 
     private void preloadBundles() {
         if (preloadBundles) {
-            Iterator<Map<String, Object>> bundles = getResourceResolver().queryResources(
+            resourceResolver.refresh();
+            Iterator<Map<String, Object>> bundles = resourceResolver.queryResources(
                     JcrResourceBundle.QUERY_LANGUAGE_ROOTS, "xpath");
             Set<Key> usedKeys = new HashSet<Key>();
             while (bundles.hasNext()) {
@@ -645,86 +567,72 @@ public class JcrResourceBundleProvider implements ResourceBundleProvider, EventH
     }
 
     /**
-     * Logs out from the repository and clears the resource bundle cache.
-     */
-    private void releaseRepository() {
-        ResourceResolver resolver = this.resourceResolver;
-
-        this.resourceResolver = null;
-        clearCache();
-
-        if (resolver != null) {
-
-            try {
-                resolver.close();
-            } catch (Throwable t) {
-                log.info(
-                    "releaseRepository: Unexpected problem closing the ResourceResolver",
-                    t);
-            }
-        }
-    }
-
-    /**
-     * Converts the given <code>localeString</code> to valid
-     * <code>java.util.Locale</code>. If the locale string is
-     * <code>null</code> or empty, the platform default locale is assumed. If
+     * Converts the given <code>localeString</code> to a valid
+     * <code>java.util.Locale</code>. It must either be in the format specified by
+     * {@link Locale#toString()} or in <a href="https://tools.ietf.org/html/bcp47">BCP 47 format</a>
+     * If the locale string is <code>null</code> or empty, the platform default locale is assumed. If
      * the localeString matches any locale available per default on the
      * platform, that platform locale is returned. Otherwise the localeString is
      * parsed and the language and country parts are compared against the
      * languages and countries provided by the platform. Any unsupported
      * language or country is replaced by the platform default language and
      * country.
+     * @param localeString the locale as string
+     * @return the {@link Locale} being generated from the {@code localeString}
      */
-    private Locale toLocale(String localeString) {
+    static Locale toLocale(String localeString) {
         if (localeString == null || localeString.length() == 0) {
             return Locale.getDefault();
         }
+        // support BCP 47 compliant strings as well (using a different separator "-" instead of "_")
+        localeString = localeString.replaceAll("-", "_");
 
         // check language and country
-        String[] parts = localeString.split("_");
+        final String[] parts = localeString.split("_");
         if (parts.length == 0) {
             return Locale.getDefault();
         }
 
         // at least language is available
         String lang = parts[0];
+        boolean isValidLanguageCode = false;
         String[] langs = Locale.getISOLanguages();
         for (int i = 0; i < langs.length; i++) {
-            if (langs[i].equals(lang)) {
-                lang = null; // signal ok
+            if (langs[i].equalsIgnoreCase(lang)) {
+                isValidLanguageCode = true;
                 break;
             }
         }
-        if (lang != null) {
-            parts[0] = Locale.getDefault().getLanguage();
+        if (!isValidLanguageCode) {
+            lang = Locale.getDefault().getLanguage();
         }
 
         // only language
         if (parts.length == 1) {
-            return new Locale(parts[0]);
+            return new Locale(lang);
         }
 
         // country is also available
         String country = parts[1];
+        boolean isValidCountryCode = false;
         String[] countries = Locale.getISOCountries();
         for (int i = 0; i < countries.length; i++) {
-            if (countries[i].equals(lang)) {
-                country = null; // signal ok
+            if (countries[i].equalsIgnoreCase(country)) {
+                isValidCountryCode = true; // signal ok
                 break;
             }
         }
-        if (country != null) {
-            parts[1] = Locale.getDefault().getCountry();
+        if (!isValidCountryCode) {
+            country = Locale.getDefault().getCountry();
         }
 
         // language and country
         if (parts.length == 2) {
-            return new Locale(parts[0], parts[1]);
+            return new Locale(lang, country);
         }
 
         // language, country and variant
-        return new Locale(parts[0], parts[1], parts[2]);
+        return new Locale(lang, country, parts[2]);
     }
 
     //---------- internal class

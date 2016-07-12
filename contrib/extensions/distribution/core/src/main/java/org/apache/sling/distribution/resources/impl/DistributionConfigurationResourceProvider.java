@@ -29,6 +29,7 @@ import org.apache.sling.api.resource.ModifyingResourceProvider;
 import org.apache.sling.api.resource.PersistenceException;
 import org.apache.sling.api.resource.ResourceProvider;
 import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.distribution.component.impl.DistributionComponent;
 import org.apache.sling.distribution.component.impl.DistributionComponentKind;
 import org.apache.sling.distribution.component.impl.DistributionConfiguration;
 import org.apache.sling.distribution.component.impl.DistributionConfigurationManager;
@@ -49,7 +50,6 @@ public class DistributionConfigurationResourceProvider extends AbstractModifying
 
     private static final String SETTINGS_RESOURCE_TYPE = DistributionResourceTypes.DEFAULT_SETTING_RESOURCE_TYPE;
 
-
     private final DistributionConfigurationManager configurationManager;
 
     private final DistributionComponentKind kind;
@@ -58,12 +58,11 @@ public class DistributionConfigurationResourceProvider extends AbstractModifying
         super(resourceRoot);
         this.configurationManager = configurationManager;
         this.kind = DistributionComponentKind.fromName(kind);
-
     }
 
     @Override
-    protected void save(ResourceResolver resourceResolver, Map<String, Map<String, Object>> changedResources,
-                        Set<String> deletedResources) throws PersistenceException {
+    protected void saveInternalResources(ResourceResolver resourceResolver, Map<String, Map<String, Object>> changedResources,
+                                         Set<String> deletedResources) throws PersistenceException {
         for (Map.Entry<String, Map<String, Object>> entry : changedResources.entrySet()) {
             String resourceName = entry.getKey();
             Map<String, Object> properties = entry.getValue();
@@ -71,35 +70,60 @@ public class DistributionConfigurationResourceProvider extends AbstractModifying
             String componentName = getConfigName(resourceName);
 
             DistributionConfiguration config = new DistributionConfiguration(kind, componentName, properties);
-            configurationManager.saveConfig(config);
+            configurationManager.saveConfig(resourceResolver, config);
         }
 
         for (String resourceName : deletedResources) {
             String componentName = getConfigName(resourceName);
 
-            configurationManager.deleteConfig(kind, componentName);
+            configurationManager.deleteConfig(resourceResolver, kind, componentName);
         }
     }
 
     @Override
-    protected Map<String, Object> getResourceProperties(SimplePathInfo pathInfo) {
+    protected Map<String, Object> getInternalResourceProperties(ResourceResolver resolver, SimplePathInfo pathInfo) {
         if (pathInfo.isRoot()) {
-            return getResourceRootProperties();
-        }
-        else if (pathInfo.isMain()) {
-            return getResourceProperties(pathInfo.getMainResourceName());
+            return getResourceRootProperties(resolver);
+        } else if (pathInfo.isMain()) {
+            return getResourceProperties(resolver, pathInfo.getMainResourceName());
+        } else if (pathInfo.isChild()) {
+            String configName = getConfigName(pathInfo.getMainResourceName());
+
+            DistributionConfiguration config = configurationManager.getConfig(resolver, kind, configName);
+
+            if (config != null) {
+                return getChildResourceProperties(config, pathInfo.getChildResourceName());
+            }
         }
 
         return null;
     }
 
     @Override
-    protected Iterable<String> getResourceChildren(SimplePathInfo pathInfo) {
+    protected Iterable<String> getInternalResourceChildren(ResourceResolver resolver, SimplePathInfo pathInfo) {
+        if (pathInfo.isMain()) {
+            String configName = getConfigName(pathInfo.getMainResourceName());
+
+            DistributionConfiguration config = configurationManager.getConfig(resolver, kind, configName);
+
+            if (config != null) {
+                return getChildResourceChildren(config, pathInfo.getChildResourceName());
+            }
+        }
+
         return null;
     }
 
-    protected Map<String, Object> getResourceRootProperties() {
-        List<DistributionConfiguration> configsList = configurationManager.getConfigs(kind);
+    protected Map<String, Object> getChildResourceProperties(DistributionConfiguration config, String childResourceName) {
+        return null;
+    }
+
+    protected Iterable<String> getChildResourceChildren(DistributionConfiguration config, String childResourceName) {
+        return null;
+    }
+
+    private Map<String, Object> getResourceRootProperties(ResourceResolver resolver) {
+        List<DistributionConfiguration> configsList = configurationManager.getConfigs(resolver, kind);
 
         List<String> nameList = new ArrayList<String>();
         for (DistributionConfiguration config : configsList) {
@@ -116,13 +140,11 @@ public class DistributionConfigurationResourceProvider extends AbstractModifying
     }
 
 
-
-
-    protected Map<String, Object> getResourceProperties(String resourceName) {
+    private Map<String, Object> getResourceProperties(ResourceResolver resolver, String resourceName) {
 
         String componentName = getConfigName(resourceName);
 
-        DistributionConfiguration config = configurationManager.getConfig(kind, componentName);
+        DistributionConfiguration config = configurationManager.getConfig(resolver, kind, componentName);
 
         if (config != null) {
 
@@ -139,13 +161,11 @@ public class DistributionConfigurationResourceProvider extends AbstractModifying
     }
 
 
-
-
     private String getConfigName(String configName) {
         return configName;
     }
 
-    String getResourceType(DistributionComponentKind kind) {
+    private String getResourceType(DistributionComponentKind kind) {
         return SETTINGS_RESOURCE_TYPE;
     }
 

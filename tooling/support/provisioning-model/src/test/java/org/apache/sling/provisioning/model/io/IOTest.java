@@ -18,6 +18,7 @@ package org.apache.sling.provisioning.model.io;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import java.io.StringReader;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.sling.provisioning.model.Configuration;
+import org.apache.sling.provisioning.model.Feature;
 import org.apache.sling.provisioning.model.Model;
 import org.apache.sling.provisioning.model.ModelUtility;
 import org.apache.sling.provisioning.model.Traceable;
@@ -91,7 +93,7 @@ public class IOTest {
             configs.add(c);
         }
 
-        assertEquals(3, configs.size());
+        assertEquals(4, configs.size());
 
         final Configuration cfgA = configs.get(0);
         assertEquals("org.apache.test.A", cfgA.getPid());
@@ -112,5 +114,18 @@ public class IOTest {
         assertEquals(2, cfgC.getProperties().size());
         assertEquals("C", cfgC.getProperties().get("name"));
         assertArrayEquals(new Integer[] {1,2,3}, (Integer[])cfgC.getProperties().get("array"));
+        
+        final Configuration cfgD = configs.get(3);
+        assertEquals("org.apache.test.D", cfgD.getPid());
+        assertEquals("Here is\na multiline\nstring", cfgD.getProperties().get("textA"));
+        assertEquals("Another one\nusing\nescaped newlines", cfgD.getProperties().get("textB"));
+    }
+
+    @Test public void testAddition() throws Exception {
+        final Model model = U.readCompleteTestModel(new String[] {"additional.txt"});
+        final Feature f = model.getFeature("main");
+        assertNotNull(f);
+        assertEquals(1, f.getAdditionalSections().size());
+        assertEquals(1, f.getAdditionalSections("additional").size());
     }
 }

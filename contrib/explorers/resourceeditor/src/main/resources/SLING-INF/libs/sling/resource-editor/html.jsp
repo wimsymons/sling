@@ -88,11 +88,13 @@ Principal userPrincipal = ((HttpServletRequest)pageContext.getRequest()).getUser
 <c:set var="userPrincipal" value='<%=userPrincipal %>'/>
 
 <script type="text/javascript">
-var ntManager = new de.sandroboehme.NodeTypeManager();
+var ntManager = new org.apache.sling.jcr.js.nodetypes.NodeTypeManager();
 
 var mainControllerSettings = {
 		contextPath: "<%= request.getContextPath() %>",
-		nodeTypes: ntManager.getNodeTypeNames() 
+		nodeTypes: ntManager.getNodeTypeNames(),
+		errorStatus: '${requestScope["javax.servlet.error.status_code"]}',
+		errorMessage: '<%=request.getAttribute("javax.servlet.error.message") == null ? "" : request.getAttribute("javax.servlet.error.message") %>'
 };
 var mainController = new org.apache.sling.reseditor.MainController(mainControllerSettings, ntManager);
 
@@ -126,7 +128,7 @@ new org.apache.sling.reseditor.PropertyController({}, mainController);
 		<div id="login" class="row">
 			<div class="col-sm-12">
 			 	<div class="logo">
-				The Sling Resource Editor <span class="edition">node-edit version</span>
+				The Sling Resource Editor <span class="edition">build with passion</span>
 				</div>			 	
 				<div class="tabbable tabs-below"> 
 				  <div id="login_tab_content" class="tab-content plate-background plate-box-shadow" style="display:none;">
@@ -189,8 +191,8 @@ new org.apache.sling.reseditor.PropertyController({}, mainController);
 		  		</div>
 		  	</div>		
 		</div>
-		<div class="row">
-			<div class="col-sm-4">
+		<div id="main-row" class="row">
+			<div id="sidebar-col" class="col-sm-4">
 				<div id="sidebar" class="plate">
 					<div class="ie9filter-plate-div">
 						<div style="display:none;" class="info-content-container" >
@@ -205,6 +207,7 @@ new org.apache.sling.reseditor.PropertyController({}, mainController);
 						  			<li>the <kbd>shift</kbd> key for multi selecting a list of nodes.</li>
 						  			<li>the <kbd>del</kbd> key for deleting the selected nodes.</li>
 						  			<li>the <kbd>c</kbd> key on a node when the tree has the focus for opening the dialog to add a child node.</li>
+						  			<li><kbd><kbd>ctrl</kbd>+<kbd>c</kbd></kbd> and <kbd><kbd>ctrl</kbd>+<kbd>v</kbd></kbd> can be used to copy and paste a node.</li>
 						  			<li>a double click to rename a node. Special JCR characters like ':' are not allowed as node names.</li>
 						  		</ul>
 							</div>
@@ -213,9 +216,8 @@ new org.apache.sling.reseditor.PropertyController({}, mainController);
 					</div>
 				</div>
 			</div>
-			
-			<%@ include file="properties.jsp" %>
-	    </div>
+			<%@ include file="node-content.jsp" %>
+	    </div> 
 		<div class="row" style="visibility:hidden; display:none;">
 			<div class="col-sm-12">
 				 <div id="footer" class="plate">
@@ -241,6 +243,7 @@ new org.apache.sling.reseditor.PropertyController({}, mainController);
 								<button type="button" class="close"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
 							  	<h3>Cheat Sheet</h3>
 							  	<h4>Shortcuts</h4>
+						  		<p>Submitting the dialog is only allowed if no search dialog is open and the fields are set.</p>
 						  		<p>You can use the</p>
 						  		<ul>
 					  				<li><kbd>c</kbd> key on a node when the tree has the focus for opening the dialog to add a child node.</li>
